@@ -265,7 +265,7 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
     final uri = Uri.parse(
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$_geminiApiKey");
 
-    final prompt = """Transcribe this audio file accurately with proper punctuation and formatting.
+    final prompt = """Transcribe this audio file word to word exactly accurately with proper punctuation and formatting.
 
 IMPORTANT INSTRUCTIONS:
 1. If the audio contains clear, intentional speech: Transcribe it word-for-word with correct spacing, punctuation, and paragraph breaks.
