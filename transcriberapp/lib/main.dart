@@ -263,7 +263,7 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
     }
 
     final uri = Uri.parse(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-exp:generateContent?key=$_geminiApiKey");
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$_geminiApiKey");
 
     final prompt = """Transcribe this audio file accurately with proper punctuation and formatting.
 
