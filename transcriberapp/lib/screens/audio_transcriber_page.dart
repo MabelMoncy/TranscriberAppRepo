@@ -16,7 +16,7 @@ import '../widgets/recording_view.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/success_view.dart';
 import '../widgets/error_view.dart';
-
+import 'history_page.dart';
 class AudioTranscriberPage extends StatefulWidget {
   const AudioTranscriberPage({Key? key}) : super(key: key);
 
@@ -328,6 +328,19 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
         centerTitle: true,
         elevation: 0,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        actions:[
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            tooltip: "View history",
+            onPressed: (){
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HistoryPage())
+              );
+            }
+          ),
+          const SizedBox(width: 8),
+        ]
       ),
       body: SafeArea(
         child: LayoutBuilder(
