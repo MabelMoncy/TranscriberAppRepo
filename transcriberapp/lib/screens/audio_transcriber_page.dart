@@ -7,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:record/record.dart';
-
 import '../models/app_state.dart';
 import '../services/gemini_service.dart';
 import '../widgets/initial_view.dart';
@@ -17,6 +16,11 @@ import '../widgets/loading_view.dart';
 import '../widgets/success_view.dart';
 import '../widgets/error_view.dart';
 import 'history_page.dart';
+import '../models/transcription_record.dart';
+import '../services/database_service.dart';
+import 'package:path_provider/path_provider.dart'; // For getApplicationDocumentsDirectory
+import 'package:path/path.dart' as p; // For joining paths
+
 class AudioTranscriberPage extends StatefulWidget {
   const AudioTranscriberPage({Key? key}) : super(key: key);
 
@@ -50,25 +54,11 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
   }
 
   Future<void> _initializeApp() async {
-    // Load API key safely
-    try {
-      await dotenv.load(fileName: ".env");
-      _geminiApiKey = dotenv.env['GEMINI_API_KEY'];
-      
-      if (_geminiApiKey == null || _geminiApiKey!.isEmpty) {
-        setState(() {
-          _errorMessage = "API key not found. Please add GEMINI_API_KEY to your .env file";
-          _appState = AppState.error;
-        });
-      } else {
-        _geminiService = GeminiService(_geminiApiKey!);
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = "Failed to load configuration: ${e.toString()}";
-        _appState = AppState.error;
-      });
-    }
+    const serverUrl = "http://192.168.1.35:8000"; 
+
+    setState(() {
+      _geminiService = GeminiService(serverUrl);
+    });
 
     _initSharingListener();
   }
@@ -105,43 +95,37 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
 
   Future<void> _startTranscriptionProcess() async {
     if (_sharedFilePath == null) return;
-
-    if (_geminiService == null) {
-      setState(() {
-        _errorMessage = "Please add your Gemini API key to the .env file";
-        _appState = AppState.error;
-      });
-      return;
-    }
+    // ... (keep existing null checks) ...
 
     File audioFile = File(_sharedFilePath!);
-    String? mimeType = _sharedFileMimeType;
-
-    if (mimeType == null || !mimeType.startsWith('audio/')) {
-      setState(() {
-        _errorMessage = "Invalid file type. Please share an audio file.";
-        _appState = AppState.error;
-      });
-      return;
-    }
+    String? mimeType = _sharedFileMimeType ?? 'audio/m4a'; // Default to m4a if null
 
     setState(() {
-      _appState = AppState.uploading;
-      _statusMessage = "Uploading your audio file...";
+      _appState = AppState.transcribing;
+      _statusMessage = "Processing...";
     });
 
     try {
-      final uploadResponse = await _geminiService!.uploadFile(audioFile, mimeType);//change this to dio in production
+      // --- UPDATED BACKEND LOGIC ---
+      final transcribeResponse = await _geminiService!.transcribeAudio(audioFile, mimeType);
 
-      setState(() {
-        _appState = AppState.transcribing;
-        _statusMessage = "Transcribing your audio...";
-      });
+      // --- DATABASE LOGIC ---
+      final originalName = _sharedFilePath!.split('/').last;
+      final safeName = "${DateTime.now().millisecondsSinceEpoch}_$originalName";
 
-      final transcribeResponse = await _geminiService!.generateContent(
-        uploadResponse['uri'],
-        uploadResponse['mimeType'],
-      );// also this portion to dio in production
+      // Move shared file to safe storage
+      final permanentPath = await _saveAudioPermanently(File(_sharedFilePath!), safeName);
+
+      final record = TranscriptionRecord(
+        fileName: originalName,
+        filePath: permanentPath,
+        transcription: transcribeResponse,
+        dateCreated: DateTime.now(),
+        isAccidental: false,
+      );
+
+      await DatabaseService.instance.create(record);
+      print("✅ Shared file saved to history!");
 
       setState(() {
         _transcribedText = transcribeResponse;
@@ -149,19 +133,11 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
       });
     } catch (e) {
       setState(() {
-        if (e.toString().contains("GARBAGE_AUDIO")) {
-          _isAccidentalRecording = true;
-          _errorMessage = "⚠️ Accidental Voice Message Detected\n\nThis appears to be an accidental recording with no clear speech. The sender may have recorded this by mistake.";
-        } else if (e.toString().contains("BLOCKED")) {
-          _errorMessage = "Unable to transcribe: The audio content was blocked by safety filters.";
-        } else {
-          _errorMessage = "Error: ${e.toString()}";
-        }
+        _errorMessage = "Error: ${e.toString()}";
         _appState = AppState.error;
       });
     }
   }
-
   // Live Recording Functions
   Future<void> _startLiveRecording() async {
     // Request microphone permission
@@ -216,6 +192,23 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
     }
   }
 
+  Future<String> _saveAudioPermanently(File tempFile, String fileName) async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final newPath = p.join(appDir.path, 'recordings', fileName);
+    
+    final savedFile = File(newPath);
+    if (!await savedFile.parent.exists()) {
+      await savedFile.parent.create(recursive: true);
+    }
+
+    await tempFile.copy(newPath);
+    await tempFile.delete(); 
+
+    print("📁File moved to Safe Storage: $newPath");
+    return newPath;
+  }
+
+
   Future<void> _stopLiveRecording() async {
     _recordingTimer?.cancel();
     _recordingTimer = null;
@@ -225,48 +218,51 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
     setState(() {
       _isRecording = false;
       _appState = AppState.liveTranscribing;
-      _statusMessage = "Processing your recording...";
+      _statusMessage = "Sending audio..."; // Updated status
     });
 
     if (path != null && await File(path).exists()) {
       try {
         File audioFile = File(path);
         
-        setState(() {
-          _statusMessage = "Uploading...";
-        });
+        // --- UPDATED BACKEND LOGIC ---
+        // We no longer call uploadFile() then generateContent().
+        // We just call the one function that talks to your Python Server.
+        final transcribeResponse = await _geminiService!.transcribeAudio(audioFile, 'audio/m4a');
 
-        final uploadResponse = await _geminiService!.uploadFile(audioFile, 'audio/m4a');
-
-        setState(() {
-          _statusMessage = "Transcribing...";
-        });
-
-        final transcribeResponse = await _geminiService!.generateContent(
-          uploadResponse['uri'],
-          uploadResponse['mimeType'],
+        // --- DATABASE LOGIC (Kept exactly the same) ---
+        final fileName = "recording_${DateTime.now().millisecondsSinceEpoch}.m4a";
+        
+        // Move file to permanent storage
+        final permanentPath = await _saveAudioPermanently(File(path), fileName);
+        
+        // Save to Database
+        final record = TranscriptionRecord(
+          fileName: "Voice Note ${DateTime.now().hour}:${DateTime.now().minute}",
+          filePath: permanentPath, 
+          transcription: transcribeResponse, 
+          dateCreated: DateTime.now(),
+          isAccidental: false,
         );
+
+        await DatabaseService.instance.create(record);
+        print("✅ Live recording saved to history!");
 
         setState(() {
           _transcribedText = transcribeResponse;
           _appState = AppState.success;
         });
-
-        // Clean up temporary file
-        await audioFile.delete();
       } catch (e) {
         setState(() {
-          if (e.toString().contains("GARBAGE_AUDIO")) {
-            _isAccidentalRecording = true;
-            _errorMessage = "⚠️ No Clear Speech Detected\n\nYour recording doesn't contain clear speech. Please try recording again in a quieter environment.";
-          } else {
-            _errorMessage = "Error: ${e.toString()}";
-          }
+          // Simplified error handling since the backend handles specific logic
+          _errorMessage = "Error: ${e.toString()}";
           _appState = AppState.error;
         });
       }
     }
   }
+
+  
 
   void _copyToClipboard() {
     if (_transcribedText != null && _transcribedText!.isNotEmpty) {

@@ -1,15 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/audio_transcriber_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await dotenv.load(fileName: ".env");
-  } catch (e) {
-    print("Warning: .env file not found. Please add your API key.");
-  }
   runApp(const MyApp());
 }
 
