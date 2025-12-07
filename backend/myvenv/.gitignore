@@ -1,3 +1,25 @@
-# Created by venv; see https://docs.python.org/3/library/venv.html
-*
+# --- Python Standard ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environments ---
+# Standard names
+venv/
+env/
+# Your specific environment name
+myvenv/
+
+# --- Environment Variables (Secrets) ---
+# CRITICAL: Never commit this file!
 .env
+
+# --- App Specific Storage ---
+# These are the folders your server creates to hold audio files.
+# We do not want to upload test audio files to GitHub.
+temp_processing/
+uploaded_files/
+
+# --- IDE Settings (Optional but recommended) ---
+.vscode/
+.idea/
