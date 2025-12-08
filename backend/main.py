@@ -30,10 +30,10 @@ genai.configure(api_key=API_KEY)
 # --- 3. MODEL CONFIGURATION (The Triple Safety Net) ---
 # Primary: High Intelligence (Pro)
 # Secondary: High Speed (Flash) - Your reliable workhorse
-# Tertiary: Emergency Backup (Flash-Lite) - Cheap and always available
+# Tertiary: Emergency Backup (2.0-flash-lite) - Second generation lightweight model
 PRIMARY_NAME = "gemini-2.5-pro" 
 SECONDARY_NAME = "gemini-2.5-flash"
-TERTIARY_NAME = "gemini-2.5-flash-lite" 
+TERTIARY_NAME = "gemini-2.5-flash-lite"  # 2nd gen lightweight model
 
 logger.info(f"✅ Models Configured: [1]{PRIMARY_NAME} -> [2]{SECONDARY_NAME} -> [3]{TERTIARY_NAME}")
 
