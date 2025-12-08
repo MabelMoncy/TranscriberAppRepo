@@ -65,16 +65,35 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  Future<void> _deleteRecord(int id, String filePath) async {
-    //1.Delete the physical file first
-    final file = File(filePath);
-    if (await file.exists()){
-      await file.delete();
-      print("Deleted Audio file");
+  Future<void> _deleteRecord(int id, String filePath, int index) async {
+    // --- 1. AUDIO CLEANUP LOGIC ---
+    if (_playingIndex == index) {
+      // Scenario A: User deleted the item that is currently playing.
+      // Action: Stop audio immediately.
+      await _audioPlayer.stop();
+      setState(() {
+        _playingIndex = null;
+        _isPlaying = false;
+      });
+    } else if (_playingIndex != null && _playingIndex! > index) {
+      // Scenario B: User deleted an item ABOVE the playing item.
+      // Action: Shift the playing index up by 1 so the icon stays on the correct row.
+      setState(() {
+        _playingIndex = _playingIndex! - 1;
+      });
     }
-    //2. Delete the database entry
+
+    // --- 2. DELETE FILES ---
+    final file = File(filePath);
+    if (await file.exists()) {
+      await file.delete();
+      print("🗑️ Deleted audio file: $filePath");
+    }
+
+    // --- 3. DELETE FROM DB ---
     await DatabaseService.instance.delete(id);
-    //3. Refresh the UI
+    
+    // --- 4. REFRESH UI ---
     _refreshHistory();
   }
 
@@ -158,7 +177,7 @@ class _HistoryPageState extends State<HistoryPage> {
                       // ------------------------------------------
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _deleteRecord(record.id!, record.filePath),
+                        onPressed: () => _deleteRecord(record.id!, record.filePath, index),
                       ),
                       onTap: () => _showFullTranscription(context, record),
                     ),

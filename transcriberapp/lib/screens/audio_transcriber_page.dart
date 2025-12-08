@@ -109,6 +109,21 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
       // --- UPDATED BACKEND LOGIC ---
       final transcribeResponse = await _geminiService!.transcribeAudio(audioFile, mimeType);
 
+      final cleanText = transcribeResponse.trim();
+      if (cleanText.contains("[GARBAGE_AUDIO]") || 
+          cleanText.contains("[no audio]") || 
+          cleanText.contains("no audio detected")||
+          cleanText.contains("no speech")||
+          cleanText.contains("nothing")) {
+        
+        setState(() {
+          _isAccidentalRecording = true; // <--- Activates the Orange Color
+          _errorMessage = "⚠️ No Clear Speech Detected\n\nThe audio appears to be empty or just background noise.";
+          _appState = AppState.error;    // <--- Forces the ErrorView
+        });
+        return; // Stop here! Do not save to history.
+      }
+
       // --- DATABASE LOGIC ---
       final originalName = _sharedFilePath!.split('/').last;
       final safeName = "${DateTime.now().millisecondsSinceEpoch}_$originalName";
@@ -230,6 +245,21 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
         // We just call the one function that talks to your Python Server.
         final transcribeResponse = await _geminiService!.transcribeAudio(audioFile, 'audio/m4a');
 
+        final cleanText = transcribeResponse.trim();
+        if (cleanText.contains("[GARBAGE_AUDIO]") || 
+            cleanText.contains("[no audio]") || 
+            cleanText.contains("no audio detected")) {
+          
+          // Delete the junk file so it doesn't clutter storage
+          await audioFile.delete(); 
+
+          setState(() {
+            _isAccidentalRecording = true;
+            _errorMessage = "⚠️ No Clear Speech Detected\n\nYour recording didn't capture any clear voice data.";
+            _appState = AppState.error;
+          });
+          return; 
+        }
         // --- DATABASE LOGIC (Kept exactly the same) ---
         final fileName = "recording_${DateTime.now().millisecondsSinceEpoch}.m4a";
         
