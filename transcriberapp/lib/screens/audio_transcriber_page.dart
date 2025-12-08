@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:record/record.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/app_state.dart';
 import '../services/gemini_service.dart';
 import '../widgets/initial_view.dart';
@@ -18,8 +18,8 @@ import '../widgets/error_view.dart';
 import 'history_page.dart';
 import '../models/transcription_record.dart';
 import '../services/database_service.dart';
-import 'package:path_provider/path_provider.dart'; // For getApplicationDocumentsDirectory
-import 'package:path/path.dart' as p; // For joining paths
+import '../services/network_helper.dart';
+import 'package:path/path.dart' as p;
 
 class AudioTranscriberPage extends StatefulWidget {
   const AudioTranscriberPage({Key? key}) : super(key: key);
@@ -29,7 +29,6 @@ class AudioTranscriberPage extends StatefulWidget {
 }
 
 class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
-  String? _geminiApiKey;
   GeminiService? _geminiService;
 
   AppState _appState = AppState.initial;
@@ -54,10 +53,19 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
   }
 
   Future<void> _initializeApp() async {
-    const serverUrl = "http://192.168.1.34:8000"; 
+    final serverUrl = dotenv.env['SERVER_URL'] ?? 'http://10.0.2.2:8000';
+    final apiSecret = dotenv.env['API_SECRET'] ?? '';
+
+    if (serverUrl.isEmpty || apiSecret.isEmpty) {
+      setState(() {
+        _errorMessage = "Configuration error. Please set up your .env file with SERVER_URL and API_SECRET.";
+        _appState = AppState.error;
+      });
+      return;
+    }
 
     setState(() {
-      _geminiService = GeminiService(serverUrl);
+      _geminiService = GeminiService(serverUrl, apiSecret);
     });
 
     _initSharingListener();
@@ -95,10 +103,18 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
 
   Future<void> _startTranscriptionProcess() async {
     if (_sharedFilePath == null) return;
-    // ... (keep existing null checks) ...
+
+    // Check internet connectivity
+    if (!await NetworkHelper.hasInternetConnection()) {
+      setState(() {
+        _errorMessage = NetworkHelper.getNetworkErrorMessage();
+        _appState = AppState.error;
+      });
+      return;
+    }
 
     File audioFile = File(_sharedFilePath!);
-    String? mimeType = _sharedFileMimeType ?? 'audio/m4a'; // Default to m4a if null
+    String? mimeType = _sharedFileMimeType ?? 'audio/m4a';
 
     setState(() {
       _appState = AppState.transcribing;
@@ -106,22 +122,24 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
     });
 
     try {
-      // --- UPDATED BACKEND LOGIC ---
       final transcribeResponse = await _geminiService!.transcribeAudio(audioFile, mimeType);
 
       final cleanText = transcribeResponse.trim();
-      if (cleanText.contains("[GARBAGE_AUDIO]") || 
-          cleanText.contains("[no audio]") || 
-          cleanText.contains("no audio detected")||
-          cleanText.contains("no speech")||
-          cleanText.contains("nothing")) {
+      final lowerText = cleanText.toLowerCase();
+      
+      if (lowerText.contains("[garbage_audio]") || 
+          lowerText.contains("[no audio]") || 
+          lowerText.contains("no audio detected") ||
+          lowerText.contains("no speech") ||
+          lowerText.contains("no clear speech") ||
+          lowerText.contains("nothing")) {
         
         setState(() {
-          _isAccidentalRecording = true; // <--- Activates the Orange Color
+          _isAccidentalRecording = true;
           _errorMessage = "⚠️ No Clear Speech Detected\n\nThe audio appears to be empty or just background noise.";
-          _appState = AppState.error;    // <--- Forces the ErrorView
+          _appState = AppState.error;
         });
-        return; // Stop here! Do not save to history.
+        return;
       }
 
       // --- DATABASE LOGIC ---
@@ -140,7 +158,6 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
       );
 
       await DatabaseService.instance.create(record);
-      print("✅ Shared file saved to history!");
 
       setState(() {
         _transcribedText = transcribeResponse;
@@ -219,7 +236,6 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
     await tempFile.copy(newPath);
     await tempFile.delete(); 
 
-    print("📁File moved to Safe Storage: $newPath");
     return newPath;
   }
 
@@ -237,18 +253,28 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
     });
 
     if (path != null && await File(path).exists()) {
+      // Check internet connectivity
+      if (!await NetworkHelper.hasInternetConnection()) {
+        setState(() {
+          _errorMessage = NetworkHelper.getNetworkErrorMessage();
+          _appState = AppState.error;
+        });
+        return;
+      }
+
       try {
         File audioFile = File(path);
         
-        // --- UPDATED BACKEND LOGIC ---
-        // We no longer call uploadFile() then generateContent().
-        // We just call the one function that talks to your Python Server.
         final transcribeResponse = await _geminiService!.transcribeAudio(audioFile, 'audio/m4a');
 
         final cleanText = transcribeResponse.trim();
-        if (cleanText.contains("[GARBAGE_AUDIO]") || 
-            cleanText.contains("[no audio]") || 
-            cleanText.contains("no audio detected")) {
+        final lowerText = cleanText.toLowerCase();
+        
+        if (lowerText.contains("[garbage_audio]") || 
+            lowerText.contains("[no audio]") || 
+            lowerText.contains("no audio detected") ||
+            lowerText.contains("no speech") ||
+            lowerText.contains("no clear speech")) {
           
           // Delete the junk file so it doesn't clutter storage
           await audioFile.delete(); 
@@ -267,16 +293,17 @@ class _AudioTranscriberPageState extends State<AudioTranscriberPage> {
         final permanentPath = await _saveAudioPermanently(File(path), fileName);
         
         // Save to Database
+        final now = DateTime.now();
+        final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
         final record = TranscriptionRecord(
-          fileName: "Voice Note ${DateTime.now().hour}:${DateTime.now().minute}",
+          fileName: "Voice Note $timeStr",
           filePath: permanentPath, 
           transcription: transcribeResponse, 
-          dateCreated: DateTime.now(),
+          dateCreated: now,
           isAccidental: false,
         );
 
         await DatabaseService.instance.create(record);
-        print("✅ Live recording saved to history!");
 
         setState(() {
           _transcribedText = transcribeResponse;

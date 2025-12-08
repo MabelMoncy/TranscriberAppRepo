@@ -35,6 +35,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   void dispose() {
+    _audioPlayer.stop();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -47,6 +48,16 @@ class _HistoryPageState extends State<HistoryPage> {
 
   Future<void> _toggleAudio(String filePath, int index) async {
     try {
+      // Check if file exists before playing
+      if (!await File(filePath).exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Audio file not found. It may have been deleted.")),
+          );
+        }
+        return;
+      }
+
       if (_playingIndex == index && _isPlaying) {
         await _audioPlayer.pause();
         setState(() => _isPlaying = false);
@@ -59,35 +70,58 @@ class _HistoryPageState extends State<HistoryPage> {
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error playing audio: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error playing audio: $e")),
+        );
+      }
     }
   }
 
   Future<void> _deleteRecord(int id, String filePath, int index) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Recording'),
+        content: const Text('Are you sure you want to delete this recording? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     // --- 1. AUDIO CLEANUP LOGIC ---
     if (_playingIndex == index) {
-      // Scenario A: User deleted the item that is currently playing.
-      // Action: Stop audio immediately.
       await _audioPlayer.stop();
       setState(() {
         _playingIndex = null;
         _isPlaying = false;
       });
     } else if (_playingIndex != null && _playingIndex! > index) {
-      // Scenario B: User deleted an item ABOVE the playing item.
-      // Action: Shift the playing index up by 1 so the icon stays on the correct row.
       setState(() {
         _playingIndex = _playingIndex! - 1;
       });
     }
 
     // --- 2. DELETE FILES ---
-    final file = File(filePath);
-    if (await file.exists()) {
-      await file.delete();
-      print("🗑️ Deleted audio file: $filePath");
+    try {
+      final file = File(filePath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      // Silent fail - file might already be deleted
     }
 
     // --- 3. DELETE FROM DB ---
@@ -177,7 +211,9 @@ class _HistoryPageState extends State<HistoryPage> {
                       // ------------------------------------------
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _deleteRecord(record.id!, record.filePath, index),
+                        onPressed: record.id == null 
+                            ? null 
+                            : () => _deleteRecord(record.id!, record.filePath, index),
                       ),
                       onTap: () => _showFullTranscription(context, record),
                     ),

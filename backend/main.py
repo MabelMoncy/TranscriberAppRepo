@@ -55,9 +55,52 @@ async def verify_secret(x_app_secret: str = Header(None)):
         logger.warning(f"🛑 Security Block: Invalid Secret received: {x_app_secret}")
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid Secret")
 
-# --- 5. THE RESILIENT CHEF (Cascade Logic) ---
+# --- 5. GARBAGE AUDIO DETECTOR ---
+def is_garbage_audio(text: str) -> bool:
+    """
+    Detects if the transcription is garbage/accidental recording.
+    Returns True if audio should be flagged as garbage.
+    """
+    if not text or len(text.strip()) == 0:
+        return True
+    
+    text_lower = text.lower().strip()
+    
+    # Pattern 1: Repetitive characters (like "000000:0000" or ".........")
+    if len(set(text_lower.replace(":", "").replace(".", "").replace(" ", ""))) <= 3:
+        return True
+    
+    # Pattern 2: Very short transcription (less than 5 characters)
+    if len(text_lower.replace(" ", "")) < 5:
+        return True
+    
+    # Pattern 3: Only numbers and punctuation
+    if all(c.isdigit() or c in ":.,-_" or c.isspace() for c in text):
+        return True
+    
+    # Pattern 4: Explicit markers from Gemini
+    garbage_markers = [
+        "[no audio]",
+        "[silence]",
+        "[inaudible]",
+        "no speech",
+        "no audio detected",
+        "no clear speech",
+        "background noise only",
+        "nothing",
+        "[music]",
+        "[background noise]"
+    ]
+    
+    for marker in garbage_markers:
+        if marker in text_lower:
+            return True
+    
+    return False
+
+# --- 6. THE RESILIENT CHEF (Cascade Logic) ---
 async def transcribe_cascade(audio_path: str, mime_type: str):
-    prompt = "Transcribe this audio exactly word-for-word."
+    prompt = "Transcribe this audio exactly word-for-word. If there is no clear speech, respond with: [NO CLEAR SPEECH]"
 
     # --- LEVEL 1: PRIMARY ---
     try:
@@ -113,13 +156,25 @@ async def handle_transcription(file: UploadFile = File(...)):
 
         # Cook the audio
         result = await transcribe_cascade(file_path, file.content_type)
+        transcription_text = result["text"]
+        
+        # Check if audio is garbage
+        if is_garbage_audio(transcription_text):
+            logger.warning(f"⚠️ Garbage audio detected: '{transcription_text[:50]}'")
+            return {
+                "status": "success",
+                "transcription": "[GARBAGE_AUDIO] No clear speech detected in this recording.",
+                "model_used": result["model"],
+                "is_garbage": True
+            }
         
         logger.info(f"✅ Success! Used model: {result['model']}")
 
         return {
             "status": "success",
-            "transcription": result["text"],
-            "model_used": result["model"]
+            "transcription": transcription_text,
+            "model_used": result["model"],
+            "is_garbage": False
         }
 
     except Exception as e:

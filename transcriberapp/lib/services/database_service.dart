@@ -20,7 +20,20 @@ class DatabaseService{
     Future<Database> _initDB(String filePath) async{
         final dbPath = await getDatabasesPath();
         final path = join(dbPath, filePath);
-        return await openDatabase(path,version:1,onCreate:_createDB);
+        return await openDatabase(
+          path,
+          version:1,
+          onCreate:_createDB,
+          onUpgrade: _upgradeDB,
+        );
+    }
+
+    //3b. Database upgrade handler for future schema changes
+    Future _upgradeDB(Database db, int oldVersion, int newVersion) async{
+        // Example for future updates:
+        // if (oldVersion < 2) {
+        //   await db.execute('ALTER TABLE history ADD COLUMN newField TEXT');
+        // }
     }
 
     //4. Creating the database.Create the table (This runs Only the first time the app is launched)
