@@ -25,20 +25,15 @@
 ### 1. Deploy Backend to Production Server
 Your backend is currently running locally on `192.168.1.34:8000`.
 
-**Options:**
-- **Heroku** (Free tier available): https://www.heroku.com/
-- **Railway** (Easy deployment): https://railway.app/
-- **DigitalOcean App Platform**: https://www.digitalocean.com/products/app-platform
-- **AWS EC2** (More control): https://aws.amazon.com/ec2/
-- **Google Cloud Run** (Serverless): https://cloud.google.com/run
+**You will need to:**
+1. Choose a hosting provider for your Python FastAPI backend
+2. Deploy your backend to get a production URL (must be HTTPS)
+3. Update `.env` file with the production URL:
+   ```
+   SERVER_URL=https://your-production-backend.com
+   ```
 
-**After deployment:**
-1. Get your production URL (e.g., `https://your-app.railway.app`)
-2. Update `.env` file:
-   ```
-   SERVER_URL=https://your-app.railway.app
-   ```
-3. Ensure backend has HTTPS (required for production)
+**Note:** For Play Store submission, your backend must be publicly accessible with HTTPS enabled.
 
 ### 2. Create Release Signing Key
 
