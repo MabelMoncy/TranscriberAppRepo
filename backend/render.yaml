@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: transcriber-backend
+    runtime: python
+    region: oregon # Change to your preferred region
+    plan: free # Free tier - upgrade to starter for better performance
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # Set manually in Render dashboard
+      - key: APP_SECRET
+        sync: false # Set manually in Render dashboard
+      - key: PYTHON_VERSION
+        value: 3.11.0
