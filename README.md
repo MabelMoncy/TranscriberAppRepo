@@ -30,7 +30,7 @@ This app represents more than technology; it represents the power of using our s
 
 ### ⚡ Core Functionality
 - 🎙️ **Real-time Audio Recording** - Record directly from your device
-- 📁 **File Upload Support** - Import existing audio files (MP3, WAV, M4A, etc.)
+- 📁 **File Upload Support** - Import existing audio files from whatsapp (.opus)
 - 🤖 **AI-Powered Transcription** - Powered by Google Gemini 2.5 with triple-fallback system
 - 💾 **History Management** - Save, view, and manage all your transcriptions
 - 🗑️ **Smart Garbage Detection** - Automatically filters out accidental or empty recordings
