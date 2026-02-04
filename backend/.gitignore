@@ -13,6 +13,8 @@ myvenv/
 # --- Environment Variables (Secrets) ---
 # CRITICAL: Never commit this file!
 .env
+.env.local
+.env.production
 
 # --- App Specific Storage ---
 # These are the folders your server creates to hold audio files.
