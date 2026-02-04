@@ -53,7 +53,8 @@ This app represents more than technology; it represents the power of using our s
 > **Note:** Add screenshots of your app here
 
 ```
-[Screenshot 1: Home Screen]  [Screenshot 2: Recording]  [Screenshot 3: History]
+![TranscriberAppImage](https://github.com/user-attachments/assets/63e69f99-9445-40f8-89d2-885806a310b6)
+
 ```
 
 ---
