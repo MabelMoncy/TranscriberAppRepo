@@ -1,4 +1,4 @@
-# 🎤 Audio Transcriber App - Solution for WhatsApps's unavailable regional Language Transcription
+# 🎤 Transcriber App - Solution for WhatsApps's unavailable regional Language Transcription
 <div align="center">
 
 ![Project Banner](https://img.shields.io/badge/Made%20with-❤️-red)
