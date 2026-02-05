@@ -1,5 +1,4 @@
 # 🎤 Audio Transcriber App - Solution for WhatsApps's unavailable regional Language Transcription
-## A Serverless model is also developed and you can view it here: 
 <div align="center">
 
 ![Project Banner](https://img.shields.io/badge/Made%20with-❤️-red)
